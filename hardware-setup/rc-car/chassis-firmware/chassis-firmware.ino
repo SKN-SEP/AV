@@ -22,8 +22,8 @@
 #define ESC_STOP_PWM 1255
 
 // Other constants
-#define BAUD_RATE 115200
-#define CMD_DURATION 1000
+#define BAUD_RATE 52000
+#define CMD_DURATION 500
 
 // Global variables
 ESP32PWM servo(false), esc(false);
@@ -47,6 +47,7 @@ void setup() {
 
   // Communication setup
   Serial.begin(BAUD_RATE);
+  pinMode(2, OUTPUT);
   delay(5000);
 }
 
@@ -65,6 +66,7 @@ void loop() {
     if (millis() - lastExecutedCmdMillis > CMD_DURATION) {
       setSteering(0);
       setThrottle(0);
+      digitalWrite(2, HIGH);
       lastExecutedCmdMillis = millis();
     }
   }
