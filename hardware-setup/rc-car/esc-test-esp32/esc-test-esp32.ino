@@ -6,10 +6,8 @@
 #define ESC_RESOLUTION 14
 
 // PWM Values
-#define ESC_MAX_FORWARD_PWM 1295        // Values have been carefully chosen from the actual range
-#define ESC_MIN_FORWARD_PWM 1280        // It's crucial to limit the full power of the car
+#define ESC_MAX_FORWARD_PWM 1295
 #define ESC_MAX_BACKWARD_PWM 1145
-#define ESC_MIN_BACKWARD_PWM 1175
 #define ESC_STOP_PWM 1255
 
 #define SERVO_PIN 14
