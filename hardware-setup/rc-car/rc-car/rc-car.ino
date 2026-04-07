@@ -2,121 +2,142 @@
 #include <ESP32PWM.h>
 
 // Servo constants
-#define SERVO_PIN 14
-#define SERVO_FREQUENCY 50
-#define SERVO_RESOLUTION 12
-
-#define SERVO_MAX_LEFT_PWM 390
-#define SERVO_NEUTRAL_PWM 305
-#define SERVO_MAX_RIGHT_PWM 220
+const int SERVO_PIN = 14, SERVO_FREQ = 50, SERVO_RES = 12;
+const int SERVO_L = 390, SERVO_N = 305, SERVO_R = 220;
 
 // ESC constants
-#define ESC_PIN 13
-#define ESC_FREQUENCY 50
-#define ESC_RESOLUTION 14
+const int ESC_PIN = 13, ESC_FREQ = 50, ESC_RES = 14;
+const int ESC_FWD = 1290, ESC_STOP = 1255, ESC_BWD = 1140;
 
-#define ESC_FORWARD_PWM 1295  
-#define ESC_BACKWARD_PWM 1145
-#define ESC_STOP_PWM 1255
-
-// Other constants
-#define BAUD_RATE 115200
-#define CMD_DURATION 2500
+// Timing constants
+const int BAUD_RATE = 115200, CMD_DURATION_MS = 10000;
+const int REV_STEP_TIME_MS = 150;
 
 // Global variables
 ESP32PWM servo(false), esc(false);
-unsigned long lastCmdVelMillis = 0;
-int lastThrottleRatio = 0;
+unsigned long lastCmdMillis = 0;
+int targetThrottle = 0; 
+int lastTargetThrottle = 0;
 
-// Functions
-void setSteering(const int& ratio);
-void setThrottle(const int& ratio);
+// Non-blocking state machine for ESC
+const int BRAKE_DURATION_MS = 150;
+enum RevState { IDLE, BRAKE_TO_REV, UNLOCK, ENGAGE, ACTIVE_BRAKE };
+RevState revSeq = IDLE;
+unsigned long revTimer = 0;
+
+void setSteering(int ratio);
+void setThrottle(int ratio);
+void updateMotors();
 
 void setup() {
-  // Serial configuration
+  // 1. Setup serial
   Serial.begin(BAUD_RATE);
   while (!Serial) {}
 
-  // Servo setup
-  pinMode(SERVO_PIN, OUTPUT);
-  servo.attachPin(SERVO_PIN, SERVO_FREQUENCY, SERVO_RESOLUTION);
-  servo.write(SERVO_NEUTRAL_PWM);
+  // 2. Setup servo
+  servo.attachPin(SERVO_PIN, SERVO_FREQ, SERVO_RES);
+  servo.write(SERVO_N);
 
-  // ESC setup
-  pinMode(ESC_PIN, OUTPUT);
-  esc.attachPin(ESC_PIN, ESC_FREQUENCY, ESC_RESOLUTION);
-  esc.write(ESC_STOP_PWM);
+  // 3. Setup ESC
+  esc.attachPin(ESC_PIN, ESC_FREQ, ESC_RES);
+  esc.write(ESC_STOP);
 }
 
 void loop() {
-  // New message incoming
+  // 1. Check for input
   if (Serial.available() > 0) {
-    // Construct JSON
-    String input = Serial.readStringUntil('\n');
-    StaticJsonDocument<200> doc;
-    DeserializationError error = deserializeJson(doc, input);
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, Serial);
 
-    if (error) {
-      Serial.print("deserializeJson() failed: ");
-      Serial.println(error.f_str());
-      return;
-    }
-
-    if (doc.containsKey("steering")) {
-      Serial.println("Steering arg exists!");
-      setSteering(doc["steering"]);
-      lastCmdVelMillis = millis();
-    }
-    
-    if (doc.containsKey("throttle")) {
-      Serial.println("Throttle arg exists!");
-      setThrottle(doc["throttle"]);
-      lastCmdVelMillis = millis();
+    if (!error) {
+      if (doc.containsKey("steering")) setSteering(doc["steering"]);
+      if (doc.containsKey("throttle")) setThrottle(doc["throttle"]);
+      lastCmdMillis = millis();
     }
   }
 
-  // No input from master 
-  if (millis() - lastCmdVelMillis > CMD_DURATION) {
+  // 2. Failsafe
+  if (millis() - lastCmdMillis > CMD_DURATION_MS) {
     setSteering(0);
     setThrottle(0);
   }
+
+  // 3. Update the ESC state machine
+  updateMotors();
 }
 
-void setSteering(const int& ratio) {
-  // Constrain input to ensure it stays within -100 to 100
-  int constrainedRatio = constrain(ratio, -100, 100);
+void setSteering(int ratio) {
+  ratio = constrain(ratio, -100, 100);
   int pwmValue;
-
-  if (constrainedRatio < 0) {
-    // Map -100 to 0 (Left) to PWM range [390, 305]
-    pwmValue = map(constrainedRatio, -100, 0, SERVO_MAX_LEFT_PWM, SERVO_NEUTRAL_PWM);
-  } else {
-    // Map 0 to 100 (Right) to PWM range [305, 220]
-    pwmValue = map(constrainedRatio, 0, 100, SERVO_NEUTRAL_PWM, SERVO_MAX_RIGHT_PWM);
-  }
+  
+  // Scenario I: Turn left
+  if (ratio < 0) 
+    pwmValue = map(ratio, -100, 0, SERVO_L, SERVO_N);
+  
+  // Scenario II: Turn right
+  else 
+    pwmValue = map(ratio, 0, 100, SERVO_N, SERVO_R);
 
   servo.write(pwmValue);
 }
 
-void setThrottle(const int& ratio) {
-  // If moving from Forward (1) or Neutral (0) to Reverse (-1)
-  if (ratio == -1 && lastThrottleRatio >= 0) {
-    // 1. Brake
-    esc.write(ESC_BACKWARD_PWM);
-    delay(150);
-    // 2. Unlock Reverse (Neutral)
-    esc.write(ESC_STOP_PWM);
-    delay(150);
-    // 3. Engage Reverse
-    esc.write(ESC_BACKWARD_PWM);
-  }
-  else if (ratio == 1) {
-    esc.write(ESC_FORWARD_PWM);
+void setThrottle(int ratio) {
+  // Scenario I: Transitioning to reverse (double-tap sequence)
+  if (ratio == -1 && lastTargetThrottle >= 0) {
+    revSeq = BRAKE_TO_REV;
+    revTimer = millis();
   } 
-  else if (ratio == 0) {
-    esc.write(ESC_STOP_PWM);
-  }
 
-  // Update state for the next call
-  lastThrottleRatio = ratio; 
+  // Scenario II: Transitioning from forward to stop (active Braking)
+  else if (ratio == 0 && lastTargetThrottle == 1) {
+    revSeq = ACTIVE_BRAKE;
+    revTimer = millis();
+  }
+  
+  // Scenario III: Any other change (like going 0 to 1 or -1 to 0)
+  else if (ratio != -1 && revSeq != ACTIVE_BRAKE) {
+    revSeq = IDLE;
+  }
+  
+  targetThrottle = ratio;
+  lastTargetThrottle = ratio;
+}
+
+void updateMotors() {
+  // Execute the logic based on the current state of the ESC state machine
+  switch (revSeq) {
+
+    // REVERSE SEQUENCE I: Brake and start reverse timer
+    case BRAKE_TO_REV: 
+      esc.write(ESC_BWD); 
+      if (millis() - revTimer >= REV_STEP_TIME_MS) {
+        revSeq = UNLOCK; 
+        revTimer = millis();
+      }
+      break;
+
+    // REVERSE SEQUENCE II: Send neutral signal (required by most ESCs to engage reverse)
+    case UNLOCK: 
+      esc.write(ESC_STOP);
+      if (millis() - revTimer >= REV_STEP_TIME_MS) revSeq = ENGAGE;
+      break;
+
+    // REVERSE SEQUENCE III: Move backward
+    case ENGAGE: 
+      esc.write(ESC_BWD); 
+      break;
+
+    // ACTIVE BRAKING: Send backward signal to brake
+    case ACTIVE_BRAKE: 
+      esc.write(ESC_BWD);
+      if (millis() - revTimer >= BRAKE_DURATION_MS) revSeq = IDLE;
+      break;
+
+    // NORMAL OPERATION: Send forward/stop signal 
+    case IDLE: 
+    default:
+      if (targetThrottle == 1) esc.write(ESC_FWD);
+      else esc.write(ESC_STOP); 
+      break;
+  }
 }
