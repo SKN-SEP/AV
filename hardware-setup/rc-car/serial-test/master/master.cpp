@@ -61,6 +61,7 @@ int main() {
 
         std::this_thread::sleep_for(std::chrono::milliseconds(DELAY_MS));
     } 
+    my_serial.closeDevice();
     
     // Calculate duration
     std::cout << "============= END OF THE TEST ============= \n";

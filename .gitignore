@@ -1,0 +1,28 @@
+# IDE and Editor files
+# Ignores .vscode/ in the root and any subfolder
+**/.vscode/
+# Ignores Visual Studio specific files
+**/.vs/
+# Ignores JetBrains IDEs (CLion, etc.)
+**/.idea/
+
+# Compiled Binaries and Object files
+*.o
+*.obj
+*.exe
+*.out
+*.app
+
+# Build directories (common for CMake or manual builds)
+**/build/
+**/bin/
+**/obj/
+
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# Libraries and local dependencies (if applicable)
+# node_modules/
+# venv/
+# .env
