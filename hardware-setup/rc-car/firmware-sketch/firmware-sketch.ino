@@ -112,56 +112,6 @@ void setThrottle(int ratio) {
   lastTargetThrottle = ratio;
 }
 
-
-void updateMotors() {
-  // Execute the logic based on the current state of the ESC state machine
-  switch (revSeq) {
-
-    // REVERSE SEQUENCE I: Brake and start reverse timer
-    case BRAKE_TO_REV: 
-      esc.write(ESC_BWD); 
-      if (millis() - revTimer >= REV_STEP_TIME_MS) {
-        revSeq = UNLOCK; 
-        revTimer = millis();
-      }
-      break;
-
-    // REVERSE SEQUENCE II: Send neutral signal (required by most ESCs to engage reverse)
-    case UNLOCK: 
-      esc.write(ESC_STOP);
-      if (millis() - revTimer >= REV_STEP_TIME_MS) revSeq = ENGAGE;
-      break;
-
-    // REVERSE SEQUENCE III: Move backward
-    case ENGAGE: 
-      esc.write(ESC_BWD); 
-      break;
-
-    // ACTIVE BRAKING: Send backward signal to brake
-    case ACTIVE_BRAKE: 
-      esc.write(ESC_BWD);
-      if (millis() - revTimer >= BRAKE_DURATION_MS) revSeq = IDLE;
-      break;
-
-    // NORMAL OPERATION: Send forward/stop signal 
-    case IDLE: 
-    default:
-      if (targetThrottle == 1) esc.write(ESC_FWD);
-      else esc.write(ESC_STOP); 
-      break;
-  }
-}
-  
-  // Scenario III: Any other change (like going 0 to 1 or -1 to 0)
-  else if (ratio != -1 && revSeq != ACTIVE_BRAKE) {
-    revSeq = IDLE;
-  }
-  
-  targetThrottle = ratio;
-  lastTargetThrottle = ratio;
-}
-
-
 void updateMotors() {
   // Execute the logic based on the current state of the ESC state machine
   switch (revSeq) {
