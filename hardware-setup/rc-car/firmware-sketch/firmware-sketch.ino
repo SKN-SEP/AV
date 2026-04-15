@@ -1,25 +1,21 @@
-#include <ESP32PWM.h>
+#include <Servo.h>
 
 // Packet Constants
 const uint8_t HEADER = 0xAA;
 const int PACKET_SIZE = 4;
 
 // Servo constants
-const int SERVO_PIN = 14, SERVO_FREQ = 50, SERVO_RES = 12;
-const int SERVO_L = 390, SERVO_N = 305, SERVO_R = 220;
+const int SERVO_PIN = 5, SERVO_L = 2100, SERVO_N = 1500, SERVO_R = 1020;
 
 // ESC constants
-const int ESC_PIN = 13, ESC_FREQ = 50, ESC_RES = 14;
-const int ESC_FWD = 1290, ESC_STOP = 1255, ESC_BWD = 1140;
+const int ESC_PIN = 6, ESC_FWD = 1580,  ESC_STOP = 1495, ESC_BWD = 1410, ESC_BRAKE = 11;
 
 // Timing constants
+const int CMD_DURATION_MS = 500, REV_STEP_TIME_MS = 150, BRAKE_DURATION_MS = 150;
 const long BAUD_RATE = 115200;
-const int CMD_DURATION_MS = 500;
-const int REV_STEP_TIME_MS = 150;
-const int BRAKE_DURATION_MS = 150;
 
 // Global variables
-ESP32PWM servo(false), esc(false);
+Servo esc, servo;
 unsigned long lastCmdMillis = 0;
 int targetThrottle = 0; 
 int lastTargetThrottle = 0;
@@ -38,17 +34,17 @@ void setup() {
   Serial.begin(BAUD_RATE);
 
   // 2. Setup servo
-  servo.attachPin(SERVO_PIN, SERVO_FREQ, SERVO_RES);
-  servo.write(SERVO_N);
+  servo.attach(SERVO_PIN);
+  servo.writeMicroseconds(SERVO_N);
 
   // 3. Setup ESC
-  esc.attachPin(ESC_PIN, ESC_FREQ, ESC_RES);
-  esc.write(ESC_STOP);
+  esc.attach(ESC_PIN);
+  esc.writeMicroseconds(ESC_STOP);
 }
 
 void loop() {
   // 1. Binary Packet Parsing (Silent)
-  if (Serial.available() >= PACKET_SIZE) {
+  while (Serial.available() >= PACKET_SIZE) {
     uint8_t header = Serial.read();
 
     if (header == HEADER) {
@@ -87,10 +83,12 @@ void setSteering(int ratio) {
   else 
     pwmValue = map(ratio, 0, 100, SERVO_N, SERVO_R);
 
-  servo.write(pwmValue);
+  servo.writeMicroseconds(pwmValue);
 }
 
 void setThrottle(int ratio) {
+  if (lastTargetThrottle == ratio) return;
+  
   // Scenario I: Transitioning to reverse (double-tap sequence)
   if (ratio == -1 && lastTargetThrottle >= 0) {
     revSeq = BRAKE_TO_REV;
@@ -118,7 +116,7 @@ void updateMotors() {
 
     // REVERSE SEQUENCE I: Brake and start reverse timer
     case BRAKE_TO_REV: 
-      esc.write(ESC_BWD); 
+      esc.writeMicroseconds(ESC_BWD); 
       if (millis() - revTimer >= REV_STEP_TIME_MS) {
         revSeq = UNLOCK; 
         revTimer = millis();
@@ -127,26 +125,26 @@ void updateMotors() {
 
     // REVERSE SEQUENCE II: Send neutral signal (required by most ESCs to engage reverse)
     case UNLOCK: 
-      esc.write(ESC_STOP);
+      esc.writeMicroseconds(ESC_STOP);
       if (millis() - revTimer >= REV_STEP_TIME_MS) revSeq = ENGAGE;
       break;
 
     // REVERSE SEQUENCE III: Move backward
     case ENGAGE: 
-      esc.write(ESC_BWD); 
+      esc.writeMicroseconds(ESC_BWD); 
       break;
 
     // ACTIVE BRAKING: Send backward signal to brake
     case ACTIVE_BRAKE: 
-      esc.write(ESC_BWD);
+      esc.writeMicroseconds(ESC_BRAKE);
       if (millis() - revTimer >= BRAKE_DURATION_MS) revSeq = IDLE;
       break;
 
     // NORMAL OPERATION: Send forward/stop signal 
     case IDLE: 
     default:
-      if (targetThrottle == 1) esc.write(ESC_FWD);
-      else esc.write(ESC_STOP); 
+      if (targetThrottle == 1) esc.writeMicroseconds(ESC_FWD);
+      else esc.writeMicroseconds(ESC_STOP); 
       break;
   }
 }
