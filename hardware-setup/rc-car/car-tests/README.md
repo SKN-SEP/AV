@@ -20,7 +20,7 @@ It's a technical standard for electronic speed controlers (ESCs) which is differ
 | <p align="center">1675 µs</p> | <p align="center">1495 µs</p> | <p align="center">1125 µs</p> |  
 
 ## Test sketches
-Initial tests required from us to use microcontroller that can create output of 3.3V, in order to fulfill this requirement we used **ESP32**. Additionally we needed a few cables and breadboard.
+Initial tests required from us to use microcontroller that can create output of 3.3V, in order to fulfill this requirement we used **Arduino Nano Every**. Additionally we needed a few cables and breadboard.
 
 <p align="center">
     <img src="./assets/rc-car-test.jpg" width="400">
@@ -34,7 +34,7 @@ This test verifies the steering servo's range of motion and identifies the physi
 </p>
 
 ### ESC handling
-This test validates the Electronic Speed Controller (ESC) logic, specifically focusing on the "Double-Tap" safety sequence required to engage reverse gear on the Flux AC 80A. The goal is to synchronize the STOP_PWM and directional thresholds with the ESP32’s 14-bit resolution to ensure reliable transitions between braking, neutral, and backward motion.
+This test validates the Electronic Speed Controller (ESC) logic, specifically focusing on the "Double-Tap" safety sequence required to engage reverse gear on the Flux AC 80A. The goal is to synchronize the STOP_PWM and directional thresholds with the Arduino Nano Every to ensure reliable transitions between braking, neutral, and backward motion.
 
 <p align="center">
     <img src="./assets/throttle-test.gif" width="400">
@@ -52,4 +52,4 @@ During the development and calibration phase, we implemented a JSON API to allow
 | Steering  | -100 to 100 |
 | Throttle  | -1, 0, 1|
 
-> **Important**: In the final production firmware, we moved away from JSON to a raw binary packet structure to minimize latency and CPU overhead on the ESP32.
+> **Important**: In the final production firmware, we moved away from JSON to a raw binary packet structure to minimize latency and CPU overhead on the MCU.
