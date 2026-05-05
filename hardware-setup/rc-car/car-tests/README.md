@@ -45,7 +45,7 @@ During the development and calibration phase, we implemented a JSON API to allow
 
 #### JSON control packet
 ```
-{"steering": 90, "throttle": 0}
+{"S": 90, "T": 0}
 ```
 | Component | Range |
 | ----------|-------|
