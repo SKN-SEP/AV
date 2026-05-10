@@ -15,10 +15,12 @@ const int SERVO_L = 2100;
 const int SERVO_N = 1500;
 const int SERVO_R = 1020;
 
-// Throttle pulse widths 
-const int ESC_FWD = 1675;
-const int ESC_STOP = 1495; 
-const int ESC_BWD = 1125;
+// Throttle pulse widths
+const int ESC_FWD_MAX = 1590; 
+const int ESC_FWD_MIN = 1570;
+const int ESC_STOP = 1495;
+const int ESC_BWD_MAX = 1400; 
+const int ESC_BWD_MIN = 1420;
 
 // Global Variables
 Servo esc, servo;
@@ -80,14 +82,18 @@ void loop() {
 }
 
 void updateESC() {
-    int throttlePWM = (targetThrottle < 0)
-        ? map(targetThrottle, -100, 0, ESC_BWD, ESC_STOP)
-        : map(targetThrottle, 0, 100, ESC_STOP, ESC_FWD);
+    int throttlePWM;
+    if (targetThrottle == 0)
+        throttlePWM = ESC_STOP;
+    else
+        throttlePWM = (targetThrottle < 0)
+        ? map(targetThrottle, -100, -1, ESC_BWD_MAX, ESC_BWD_MIN)
+        : map(targetThrottle, 1, 100, ESC_FWD_MIN, ESC_FWD_MAX);
 
     switch (currentState) {
         case DRIVE_FWD:
             if (targetThrottle < 0) {
-                esc.writeMicroseconds(ESC_BWD); // Pulse reverse to Brake
+                esc.writeMicroseconds(ESC_BWD_MAX); // Pulse reverse to Brake
                 stateTimer = millis();
                 currentState = BRAKING;
             } else {
